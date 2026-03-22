@@ -30,7 +30,11 @@ from app.services.grok.utils.process import (
 )
 from app.services.grok.utils.upload import UploadService
 from app.services.grok.utils.retry import pick_token, rate_limited
-from app.services.grok.utils.response import make_response_id, make_chat_chunk, wrap_image_content
+from app.services.grok.utils.response import (
+    make_response_id,
+    make_chat_chunk,
+    wrap_image_content,
+)
 from app.services.grok.services.chat import GrokChatService
 from app.services.grok.services.video import VideoService
 from app.services.grok.utils.stream import wrap_stream_with_usage
@@ -297,7 +301,12 @@ class ImageStreamProcessor(BaseProcessor):
     """HTTP image stream processor."""
 
     def __init__(
-        self, model: str, token: str = "", n: int = 1, response_format: str = "b64_json", chat_format: bool = False
+        self,
+        model: str,
+        token: str = "",
+        n: int = 1,
+        response_format: str = "b64_json",
+        chat_format: bool = False,
     ):
         super().__init__(model, token)
         self.partial_index = 0
@@ -401,6 +410,8 @@ class ImageStreamProcessor(BaseProcessor):
                 output = img_data
                 if self.chat_format and output:
                     output = wrap_image_content(output, self.response_format)
+                    if self.response_format == "url" and isinstance(output, list):
+                        continue
 
                 if not self._id_generated:
                     self._response_id = make_response_id()

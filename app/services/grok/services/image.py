@@ -5,6 +5,7 @@ Grok image services.
 import asyncio
 import base64
 import math
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +19,11 @@ from app.core.storage import DATA_DIR
 from app.core.exceptions import AppException, ErrorType, UpstreamException
 from app.services.grok.utils.process import BaseProcessor
 from app.services.grok.utils.retry import pick_token, rate_limited
-from app.services.grok.utils.response import make_response_id, make_chat_chunk, wrap_image_content
+from app.services.grok.utils.response import (
+    make_response_id,
+    make_chat_chunk,
+    wrap_image_content,
+)
 from app.services.grok.utils.stream import wrap_stream_with_usage
 from app.services.token import EffortType
 from app.services.reverse.ws_imagine import ImagineWebSocketReverse
@@ -315,7 +320,9 @@ class ImageGenerationService:
                         )
                     for recovery_token in recovery_tokens:
                         extra_tasks.append(
-                            _fetch_batch(min(expected_per_call, remaining), recovery_token)
+                            _fetch_batch(
+                                min(expected_per_call, remaining), recovery_token
+                            )
                         )
                 else:
                     extra_tasks = [
@@ -327,7 +334,9 @@ class ImageGenerationService:
                     logger.warning("No tokens available for recovery attempts")
                     extra_results = []
                 else:
-                    extra_results = await asyncio.gather(*extra_tasks, return_exceptions=True)
+                    extra_results = await asyncio.gather(
+                        *extra_tasks, return_exceptions=True
+                    )
                 for batch in extra_results:
                     if isinstance(batch, Exception):
                         logger.warning(f"WS recovery batch failed: {batch}")
@@ -441,7 +450,9 @@ class ImageWSBaseProcessor(BaseProcessor):
             return "jpg"
         return None
 
-    def _filename(self, image_id: str, is_final: bool, ext: Optional[str] = None) -> str:
+    def _filename(
+        self, image_id: str, is_final: bool, ext: Optional[str] = None
+    ) -> str:
         if ext:
             ext = ext.lower()
             if ext == "jpeg":
@@ -451,9 +462,15 @@ class ImageWSBaseProcessor(BaseProcessor):
         return f"{image_id}.{ext}"
 
     def _build_file_url(self, filename: str) -> str:
-        app_url = get_config("app.app_url")
-        if app_url:
-            return f"{app_url.rstrip('/')}/v1/files/image/{filename}"
+        env_prefix = os.getenv("IMAGE_URL_PREFIX") or ""
+        app_url = get_config("app.app_url") or ""
+        base_url = env_prefix or app_url
+        if base_url:
+            if not base_url.startswith("http://") and not base_url.startswith(
+                "https://"
+            ):
+                base_url = f"https://{base_url.lstrip('/')}"
+            return f"{base_url.rstrip('/')}/v1/files/image/{filename}"
         return f"/v1/files/image/{filename}"
 
     async def _save_blob(
@@ -610,6 +627,8 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
 
                 if self.chat_format and partial_out:
                     partial_out = wrap_image_content(partial_out, self.response_format)
+                    if self.response_format == "url" and isinstance(partial_out, list):
+                        continue
 
                 if not partial_out:
                     continue
@@ -728,7 +747,10 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
                             "total_tokens": 0,
                             "input_tokens": 0,
                             "output_tokens": 0,
-                            "input_tokens_details": {"text_tokens": 0, "image_tokens": 0},
+                            "input_tokens_details": {
+                                "text_tokens": 0,
+                                "image_tokens": 0,
+                            },
                         },
                     },
                 )

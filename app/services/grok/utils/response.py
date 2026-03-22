@@ -5,7 +5,7 @@ Response formatting utilities for OpenAI-compatible API responses.
 import os
 import time
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 
 def make_response_id() -> str:
@@ -16,7 +16,7 @@ def make_response_id() -> str:
 def make_chat_chunk(
     response_id: str,
     model: str,
-    content: str,
+    content: Any,
     index: int = 0,
     role: str = "assistant",
     is_final: bool = False,
@@ -67,7 +67,7 @@ def make_chat_chunk(
 
 def make_chat_response(
     model: str,
-    content: str,
+    content: Any,
     response_id: Optional[str] = None,
     index: int = 0,
     usage: Optional[dict] = None,
@@ -116,24 +116,25 @@ def make_chat_response(
     }
 
 
-def wrap_image_content(content: str, response_format: str = "url") -> str:
+def wrap_image_content(content: Any, response_format: str = "url") -> Any:
     """
-    Wrap image content in markdown format for chat interface.
+    Wrap image content for OpenAI-compatible chat interface.
 
     Args:
         content: Image URL or base64 data
         response_format: "url" or "b64_json"/"base64"
 
     Returns:
-        Markdown-wrapped image content
+        OpenAI multimodal content or markdown-wrapped fallback
     """
     if not content:
         return content
 
     if response_format == "url":
-        return f"![image]({content})"
-    else:
-        return f"![image](data:image/png;base64,{content})"
+        if isinstance(content, (dict, list)):
+            return content
+        return [{"type": "image_url", "image_url": {"url": str(content)}}]
+    return f"![image](data:image/png;base64,{content})"
 
 
 __all__ = [
